@@ -6,6 +6,10 @@
     <title>Ağ Cihazları İzleme Paneli</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        th.siralanabilir { cursor: pointer; user-select: none; white-space: nowrap; }
+        th.siralanabilir:hover { background-color: #343a40; }
+    </style>
 </head>
 <body class="bg-light">
 
@@ -62,13 +66,13 @@
             <thead class="table-dark">
                 <tr>
                     <th style="width: 1%"></th>
-                    <th>Cihaz Adı</th>
-                    <th>IP Adresi</th>
-                    <th>Birim</th>
-                    <th>Durum</th>
-                    <th>Gecikme (ms)</th>
-                    <th>Paket Kaybı (%)</th>
-                    <th>Son Kontrol Zamanı</th>
+                    <th class="siralanabilir" data-anahtar="cihaz_adi">Cihaz Adı <i class="bi bi-chevron-expand opacity-50"></i></th>
+                    <th class="siralanabilir" data-anahtar="ip">IP Adresi <i class="bi bi-chevron-expand opacity-50"></i></th>
+                    <th class="siralanabilir" data-anahtar="birim">Birim <i class="bi bi-chevron-expand opacity-50"></i></th>
+                    <th class="siralanabilir" data-anahtar="durum">Durum <i class="bi bi-chevron-expand opacity-50"></i></th>
+                    <th class="siralanabilir" data-anahtar="gecikme">Gecikme (ms) <i class="bi bi-chevron-expand opacity-50"></i></th>
+                    <th class="siralanabilir" data-anahtar="kayip">Paket Kaybı (%) <i class="bi bi-chevron-expand opacity-50"></i></th>
+                    <th class="siralanabilir" data-anahtar="son_kontrol">Son Kontrol Zamanı <i class="bi bi-chevron-expand opacity-50"></i></th>
                     <th class="text-center">Ping</th>
                 </tr>
             </thead>
@@ -224,7 +228,8 @@
     // Süzülmüş listeyi tabloya çizer
     function tabloyuCiz() {
         const govde = document.getElementById('cihazTablosu');
-        const liste = filtreliListe();
+        const liste = siralaListe(filtreliListe());
+        basliklariGuncelle();
 
         document.getElementById('sonucSayisi').textContent =
             tumCihazlar.length ? `${liste.length} / ${tumCihazlar.length} cihaz` : '';
@@ -465,6 +470,70 @@
             hataKutusu.classList.remove('d-none');
         }
     }
+
+    // Sıralama durumu: anahtar = sıralanan sütun, yon = 1 (artan) veya -1 (azalan)
+    let siralama = {anahtar: null, yon: 1};
+    const DURUM_SIRASI = ['basarili', 'anomali', 'basarisiz', 'taranmadi'];
+
+    // "10.99.0.5" gibi bir IP'yi sayıya çevirir (10.99.0.9 < 10.99.0.10 olması için)
+    function ipSayisi(ip) {
+        return (ip || '').split('.').reduce((toplam, parca) => toplam * 256 + (parseInt(parca, 10) || 0), 0);
+    }
+
+    // Sıralama için bir cihazın seçili sütundaki değerini döndürür (boş değer: null)
+    function siralamaDegeri(c, anahtar) {
+        switch (anahtar) {
+            case 'cihaz_adi': return c.cihaz_adi || '';
+            case 'birim': return c.birim || '';
+            case 'ip': return ipSayisi(c.ip);
+            case 'durum': return DURUM_SIRASI.indexOf(cihazSinifi(c));
+            case 'gecikme': return (c.gecikme === null || c.gecikme === undefined) ? null : Number(c.gecikme);
+            case 'kayip': return (c.kayip === null || c.kayip === undefined) ? null : Number(c.kayip);
+            case 'son_kontrol': return (!c.son_kontrol || c.son_kontrol === '-') ? null : c.son_kontrol;
+            default: return null;
+        }
+    }
+
+    // Listeyi seçili sütuna göre sıralar; boş değerler yöne bakmadan hep en sonda kalır
+    function siralaListe(liste) {
+        if (!siralama.anahtar) return liste;
+        const {anahtar, yon} = siralama;
+        return [...liste].sort((a, b) => {
+            const x = siralamaDegeri(a, anahtar);
+            const y = siralamaDegeri(b, anahtar);
+            const xBos = x === null || Number.isNaN(x);
+            const yBos = y === null || Number.isNaN(y);
+            if (xBos && yBos) return 0;
+            if (xBos) return 1;
+            if (yBos) return -1;
+            const sonuc = (typeof x === 'string') ? x.localeCompare(y, 'tr') : x - y;
+            return sonuc * yon;
+        });
+    }
+
+    // Başlıklardaki ok simgelerini günceller
+    function basliklariGuncelle() {
+        document.querySelectorAll('th.siralanabilir').forEach(th => {
+            const simge = th.querySelector('i');
+            if (th.dataset.anahtar === siralama.anahtar) {
+                simge.className = 'bi ' + (siralama.yon === 1 ? 'bi-caret-up-fill' : 'bi-caret-down-fill');
+            } else {
+                simge.className = 'bi bi-chevron-expand opacity-50';
+            }
+        });
+    }
+
+    // Başlığa tıklayınca: yeni sütunda artan sıra, aynı sütuna tekrar tıklayınca yön değişir
+    document.querySelector('thead').addEventListener('click', (olay) => {
+        const th = olay.target.closest('th.siralanabilir');
+        if (!th) return;
+        if (siralama.anahtar === th.dataset.anahtar) {
+            siralama.yon = -siralama.yon;
+        } else {
+            siralama = {anahtar: th.dataset.anahtar, yon: 1};
+        }
+        tabloyuCiz();
+    });
 
     document.getElementById('silBtn').addEventListener('click', cihazSil);
     document.getElementById('taramaBaslatBtn').addEventListener('click', topluPing);
