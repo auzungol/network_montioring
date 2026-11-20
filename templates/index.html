@@ -61,6 +61,7 @@
         <table class="table table-hover align-middle mb-0">
             <thead class="table-dark">
                 <tr>
+                    <th style="width: 1%"></th>
                     <th>Cihaz Adı</th>
                     <th>IP Adresi</th>
                     <th>Birim</th>
@@ -72,7 +73,7 @@
                 </tr>
             </thead>
             <tbody id="cihazTablosu">
-                <tr><td colspan="8" class="text-center text-muted py-4">Yükleniyor...</td></tr>
+                <tr><td colspan="9" class="text-center text-muted py-4">Yükleniyor...</td></tr>
             </tbody>
         </table>
     </div>
@@ -83,7 +84,7 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Yeni Cihaz Ekle</h5>
+                <h5 class="modal-title" id="cihazModalBaslik">Yeni Cihaz Ekle</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
             </div>
             <div class="modal-body">
@@ -106,6 +107,9 @@
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
                 <button type="button" class="btn btn-success" id="kaydetBtn">
                     <i class="bi bi-save"></i> Kaydet
+                </button>
+                <button type="button" class="btn btn-danger ms-auto d-none" id="silBtn">
+                    <i class="bi bi-trash"></i> Cihazı Sil
                 </button>
             </div>
         </div>
@@ -226,16 +230,21 @@
             tumCihazlar.length ? `${liste.length} / ${tumCihazlar.length} cihaz` : '';
 
         if (tumCihazlar.length === 0) {
-            govde.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">Henüz cihaz eklenmedi.</td></tr>';
+            govde.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">Henüz cihaz eklenmedi.</td></tr>';
             return;
         }
         if (liste.length === 0) {
-            govde.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">Filtreye uyan cihaz bulunamadı.</td></tr>';
+            govde.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">Filtreye uyan cihaz bulunamadı.</td></tr>';
             return;
         }
 
         govde.innerHTML = liste.map(c => `
             <tr>
+                <td>
+                    <button class="btn btn-sm btn-outline-secondary duzenle-btn" data-ip="${kacis(c.ip).replace(/"/g, '&quot;')}" title="Düzenle / Sil">
+                        <i class="bi bi-pencil-square"></i>
+                    </button>
+                </td>
                 <td>${kacis(c.cihaz_adi)}</td>
                 <td>${kacis(c.ip)}</td>
                 <td>${kacis(c.birim)}</td>
@@ -260,7 +269,7 @@
             tabloyuCiz();
         } catch (e) {
             document.getElementById('cihazTablosu').innerHTML =
-                '<tr><td colspan="8" class="text-center text-danger py-4">Sunucuyla iletişim koptu!</td></tr>';
+                '<tr><td colspan="9" class="text-center text-danger py-4">Sunucuyla iletişim koptu!</td></tr>';
         }
     }
 
@@ -343,7 +352,18 @@
     // Tablo her yenilendiğinde butonlar yeniden oluştuğu için tıklamayı tablo üzerinden dinliyoruz
     document.getElementById('cihazTablosu').addEventListener('click', (olay) => {
         const btn = olay.target.closest('.ping-btn');
-        if (btn) pingAt(btn.dataset.ip, btn);
+        if (btn) {
+            pingAt(btn.dataset.ip, btn);
+            return;
+        }
+        const duzenleBtn = olay.target.closest('.duzenle-btn');
+        if (duzenleBtn) {
+            const cihaz = tumCihazlar.find(c => c.ip === duzenleBtn.dataset.ip);
+            if (cihaz) {
+                cihazModaliniHazirla(cihaz);
+                bootstrap.Modal.getOrCreateInstance(document.getElementById('cihazModal')).show();
+            }
+        }
     });
 
     // Filtre ve arama olayları
@@ -396,6 +416,57 @@
         }
     }
 
+    // Cihaz penceresi hem ekleme hem düzenleme için kullanılır.
+    // cihaz verilirse düzenleme modu (IP değiştirilemez, Sil butonu görünür), verilmezse ekleme modu.
+    let duzenlenenIp = null;
+    function cihazModaliniHazirla(cihaz) {
+        duzenlenenIp = cihaz ? cihaz.ip : null;
+        document.getElementById('cihazModalBaslik').textContent = cihaz ? 'Cihazı Düzenle' : 'Yeni Cihaz Ekle';
+        document.getElementById('ipInput').value = cihaz ? cihaz.ip : '';
+        document.getElementById('ipInput').readOnly = !!cihaz;
+        document.getElementById('adInput').value = cihaz ? (cihaz.cihaz_adi || '') : '';
+        document.getElementById('birimInput').value = cihaz ? (cihaz.birim || '') : '';
+        document.getElementById('silBtn').classList.toggle('d-none', !cihaz);
+        document.getElementById('modalHata').classList.add('d-none');
+    }
+
+    // "Yeni Cihaz Ekle" butonuyla açılınca (relatedTarget dolu) pencere ekleme moduna sıfırlanır
+    document.getElementById('cihazModal').addEventListener('show.bs.modal', (olay) => {
+        if (olay.relatedTarget) cihazModaliniHazirla(null);
+    });
+
+    // Düzenlenen cihazı ve ping geçmişini siler
+    async function cihazSil() {
+        if (!duzenlenenIp) return;
+        if (!confirm(`${duzenlenenIp} adresli cihaz ve tüm ping geçmişi silinecek. Emin misiniz?`)) return;
+
+        const hataKutusu = document.getElementById('modalHata');
+        hataKutusu.classList.add('d-none');
+
+        try {
+            const cevap = await fetch('/api/cihaz_yonet', {
+                method: 'DELETE',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ip: duzenlenenIp})
+            });
+            const sonuc = await cevap.json();
+
+            if (!cevap.ok) {
+                hataKutusu.textContent = sonuc.hata || 'Silme sırasında hata oluştu.';
+                hataKutusu.classList.remove('d-none');
+                return;
+            }
+
+            bootstrap.Modal.getInstance(document.getElementById('cihazModal')).hide();
+            uyariGoster(sonuc.mesaj, 'success');
+            await cihazlariYukle();
+        } catch (e) {
+            hataKutusu.textContent = 'Sunucuyla iletişim koptu!';
+            hataKutusu.classList.remove('d-none');
+        }
+    }
+
+    document.getElementById('silBtn').addEventListener('click', cihazSil);
     document.getElementById('taramaBaslatBtn').addEventListener('click', topluPing);
     document.getElementById('kaydetBtn').addEventListener('click', cihazKaydet);
     cihazlariYukle();
