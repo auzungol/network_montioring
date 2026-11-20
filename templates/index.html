@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Ağ Cihazları İzleme Paneli</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+
+<div class="container py-4">
+
+    <!-- Üst başlık ve butonlar -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3 class="mb-0">Ağ Cihazları Erişilebilirlik Paneli</h3>
+        <div class="d-flex gap-2">
+            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#taramaModal">
+                <i class="bi bi-broadcast"></i> Toplu Ping At
+            </button>
+            <button class="btn btn-dark" data-bs-toggle="modal" data-bs-target="#cihazModal">
+                <i class="bi bi-gear-fill"></i> Yeni Cihaz Ekle
+            </button>
+        </div>
+    </div>
+
+    <!-- Ping sonucu bildirimi -->
+    <div id="uyari" class="alert d-none" role="alert"></div>
+
+    <!-- Filtre ve arama -->
+    <div class="row g-2 mb-3 align-items-center">
+        <div class="col-12 col-md-3">
+            <select id="birimFiltre" class="form-select">
+                <option value="">Tüm Birimler</option>
+            </select>
+        </div>
+        <div class="col-12 col-md-3">
+            <select id="durumFiltre" class="form-select">
+                <option value="">Tüm Durumlar</option>
+                <option value="basarili">Başarılı</option>
+                <option value="basarisiz">Başarısız</option>
+                <option value="anomali">Anomali</option>
+            </select>
+        </div>
+        <div class="col-12 col-md-3">
+            <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input type="text" id="ipArama" class="form-control" placeholder="IP adresine göre ara (örn. 10.99)">
+            </div>
+        </div>
+        <div class="col-12 col-md-3">
+            <button class="btn btn-outline-secondary w-100" id="filtreTemizle">
+                <i class="bi bi-x-circle"></i> Temizle
+            </button>
+        </div>
+        <div class="col-12 text-end text-muted small" id="sonucSayisi"></div>
+    </div>
+
+    <!-- Cihaz tablosu -->
+    <div class="table-responsive shadow-sm bg-white rounded">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-dark">
+                <tr>
+                    <th>Cihaz Adı</th>
+                    <th>IP Adresi</th>
+                    <th>Birim</th>
+                    <th>Durum</th>
+                    <th>Gecikme (ms)</th>
+                    <th>Paket Kaybı (%)</th>
+                    <th>Son Kontrol Zamanı</th>
+                    <th class="text-center">Ping</th>
+                </tr>
+            </thead>
+            <tbody id="cihazTablosu">
+                <tr><td colspan="8" class="text-center text-muted py-4">Yükleniyor...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Yeni Cihaz Ekle penceresi -->
+<div class="modal fade" id="cihazModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Yeni Cihaz Ekle</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="ipInput" class="form-label fw-bold">IP Adresi</label>
+                    <input type="text" class="form-control" id="ipInput" placeholder="10.99.0.5">
+                </div>
+                <div class="mb-3">
+                    <label for="adInput" class="form-label fw-bold">Cihaz Adı</label>
+                    <input type="text" class="form-control" id="adInput" placeholder="Sunucu-1">
+                </div>
+                <div class="mb-3">
+                    <label for="birimInput" class="form-label fw-bold">Bağlı Olduğu Birim</label>
+                    <input type="text" class="form-control" id="birimInput" list="birimListesi" placeholder="Bilgi İşlem Dairesi Başkanlığı">
+                    <datalist id="birimListesi"></datalist>
+                </div>
+                <div id="modalHata" class="alert alert-danger d-none mb-0"></div>
+            </div>
+            <div class="modal-footer justify-content-start">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                <button type="button" class="btn btn-success" id="kaydetBtn">
+                    <i class="bi bi-save"></i> Kaydet
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toplu ping (Hızlı Tarama) penceresi -->
+<div class="modal fade" id="taramaModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Hızlı Tarama Başlat</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body">
+                <label for="taramaKapsam" class="form-label">Tarama Kapsamı:</label>
+                <select id="taramaKapsam" class="form-select mb-3">
+                    <option value="">Tüm Belediye Ağı</option>
+                </select>
+                <div id="taramaHata" class="alert alert-danger d-none mb-0"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                <button type="button" class="btn btn-success" id="taramaBaslatBtn">Taramayı Başlat</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // API'den gelen tüm cihazlar burada tutulur; filtreleme tarayıcıda yapılır
+    let tumCihazlar = [];
+
+    // HTML'e basılan metinleri güvenli hale getirir
+    function kacis(metin) {
+        const d = document.createElement('div');
+        d.textContent = metin ?? '';
+        return d.innerHTML;
+    }
+
+    // Durum metnine göre rozet rengi seçer
+    // Durum metnini üç sınıftan birine çevirir: taranmadi, basarili, basarisiz
+    function durumSinifi(durum) {
+        const d = (durum || '').toLocaleUpperCase('tr-TR');
+        if (d.includes('HENÜZ')) return 'taranmadi';
+        if (d.includes('BAŞARILI') || d.includes('ONLINE') || d.includes('AKTİF')) return 'basarili';
+        return 'basarisiz';
+    }
+
+    // Cihazın tek bir sınıfı olur: taranmadi, basarili, anomali veya basarisiz
+    // Ulaşılan ama gecikmesi eşiği aşan cihaz "basarili" değil, yalnızca "anomali" sayılır
+    function cihazSinifi(c) {
+        const sinif = durumSinifi(c.durum);
+        if (sinif === 'basarili' && anomaliMi(c.gecikme)) return 'anomali';
+        return sinif;
+    }
+
+    function durumRozeti(c) {
+        const sinif = cihazSinifi(c);
+        if (sinif === 'anomali') {
+            return `<span class="badge text-bg-warning" title="Gecikme ${ANOMALI_ESIGI_MS} ms üzerinde">ANOMALİ</span>`;
+        }
+        const renk = {taranmadi: 'secondary', basarili: 'success', basarisiz: 'danger'}[sinif];
+        return `<span class="badge text-bg-${renk}">${kacis(c.durum)}</span>`;
+    }
+
+    // Gecikme bu değerin (ms) üzerindeyse cihaz anomali olarak işaretlenir
+    const ANOMALI_ESIGI_MS = 100;
+
+    // Gecikme eşiğin üzerindeyse true döner
+    function anomaliMi(gecikme) {
+        const deger = Number(gecikme);
+        return gecikme !== null && gecikme !== undefined && !Number.isNaN(deger) && deger > ANOMALI_ESIGI_MS;
+    }
+
+    // Birim filtresi ve "Yeni Cihaz Ekle" önerilerini doldurur; seçili birimi korur
+    function birimleriDoldur() {
+        const birimler = [...new Set(tumCihazlar.map(c => c.birim).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'tr'));
+
+        const filtre = document.getElementById('birimFiltre');
+        const secili = filtre.value;
+        filtre.innerHTML = '<option value="">Tüm Birimler</option>' +
+            birimler.map(b => `<option value="${kacis(b).replace(/"/g, '&quot;')}">${kacis(b)}</option>`).join('');
+        // Seçili birim hâlâ varsa seçimi koru, yoksa "Tüm Birimler"e dön
+        filtre.value = birimler.includes(secili) ? secili : '';
+
+        document.getElementById('birimListesi').innerHTML =
+            birimler.map(b => `<option value="${kacis(b).replace(/"/g, '&quot;')}">`).join('');
+
+        // Toplu ping penceresindeki kapsam listesi: "Tüm Belediye Ağı" + birimler
+        const kapsam = document.getElementById('taramaKapsam');
+        const seciliKapsam = kapsam.value;
+        kapsam.innerHTML = '<option value="">Tüm Belediye Ağı</option>' +
+            birimler.map(b => `<option value="${kacis(b).replace(/"/g, '&quot;')}">${kacis(b)}</option>`).join('');
+        kapsam.value = birimler.includes(seciliKapsam) ? seciliKapsam : '';
+    }
+
+    // Seçili birime ve IP aramasına göre listeyi süzer
+    function filtreliListe() {
+        const birim = document.getElementById('birimFiltre').value;
+        const durum = document.getElementById('durumFiltre').value;
+        const aranan = document.getElementById('ipArama').value.trim();
+        return tumCihazlar.filter(c => {
+            if (birim && c.birim !== birim) return false;
+            if (aranan && !(c.ip || '').includes(aranan)) return false;
+            if (durum && cihazSinifi(c) !== durum) return false;
+            return true;
+        });
+    }
+
+    // Süzülmüş listeyi tabloya çizer
+    function tabloyuCiz() {
+        const govde = document.getElementById('cihazTablosu');
+        const liste = filtreliListe();
+
+        document.getElementById('sonucSayisi').textContent =
+            tumCihazlar.length ? `${liste.length} / ${tumCihazlar.length} cihaz` : '';
+
+        if (tumCihazlar.length === 0) {
+            govde.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">Henüz cihaz eklenmedi.</td></tr>';
+            return;
+        }
+        if (liste.length === 0) {
+            govde.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">Filtreye uyan cihaz bulunamadı.</td></tr>';
+            return;
+        }
+
+        govde.innerHTML = liste.map(c => `
+            <tr>
+                <td>${kacis(c.cihaz_adi)}</td>
+                <td>${kacis(c.ip)}</td>
+                <td>${kacis(c.birim)}</td>
+                <td>${durumRozeti(c)}</td>
+                <td>${c.gecikme ?? '-'}</td>
+                <td>${c.kayip ?? '-'}</td>
+                <td>${kacis(c.son_kontrol)}</td>
+                <td class="text-center">
+                    <button class="btn btn-sm btn-outline-primary ping-btn" data-ip="${kacis(c.ip).replace(/"/g, '&quot;')}" title="Ping at">
+                        <i class="bi bi-activity"></i>
+                    </button>
+                </td>
+            </tr>`).join('');
+    }
+
+    // Cihazları API'den çekip filtreleri ve tabloyu günceller
+    async function cihazlariYukle() {
+        try {
+            const cevap = await fetch('/api/cihazlar');
+            tumCihazlar = await cevap.json();
+            birimleriDoldur();
+            tabloyuCiz();
+        } catch (e) {
+            document.getElementById('cihazTablosu').innerHTML =
+                '<tr><td colspan="8" class="text-center text-danger py-4">Sunucuyla iletişim koptu!</td></tr>';
+        }
+    }
+
+    // Yeni cihazı kaydeder
+    async function cihazKaydet() {
+        const hataKutusu = document.getElementById('modalHata');
+        hataKutusu.classList.add('d-none');
+
+        const ip = document.getElementById('ipInput').value.trim();
+        const cihazAdi = document.getElementById('adInput').value.trim();
+        const birim = document.getElementById('birimInput').value.trim();
+
+        if (!ip || !cihazAdi || !birim) {
+            hataKutusu.textContent = 'Lütfen tüm alanları doldurun.';
+            hataKutusu.classList.remove('d-none');
+            return;
+        }
+
+        try {
+            const cevap = await fetch('/api/cihaz_yonet', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ip: ip, cihaz_adi: cihazAdi, birim: birim})
+            });
+            const sonuc = await cevap.json();
+
+            if (!cevap.ok) {
+                hataKutusu.textContent = sonuc.hata || 'Kayıt sırasında hata oluştu.';
+                hataKutusu.classList.remove('d-none');
+                return;
+            }
+
+            // Başarılı: formu temizle, pencereyi kapat, tabloyu yenile
+            ['ipInput', 'adInput', 'birimInput'].forEach(id => document.getElementById(id).value = '');
+            bootstrap.Modal.getInstance(document.getElementById('cihazModal')).hide();
+            cihazlariYukle();
+        } catch (e) {
+            hataKutusu.textContent = 'Sunucuyla iletişim koptu!';
+            hataKutusu.classList.remove('d-none');
+        }
+    }
+
+    // Sayfanın üstünde kısa süreli bildirim gösterir
+    let uyariZamanlayici;
+    function uyariGoster(mesaj, tur) {
+        const kutu = document.getElementById('uyari');
+        kutu.className = `alert alert-${tur}`;
+        kutu.textContent = mesaj;
+        clearTimeout(uyariZamanlayici);
+        uyariZamanlayici = setTimeout(() => kutu.classList.add('d-none'), 5000);
+    }
+
+    // Tek bir cihaza ping atar (mevcut /api/tara ucu, tip = cihaz)
+    async function pingAt(ip, btn) {
+        const eskiIcerik = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+        try {
+            const cevap = await fetch('/api/tara', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({tip: 'cihaz', deger: ip})
+            });
+            const sonuc = await cevap.json();
+
+            if (!cevap.ok) {
+                uyariGoster(sonuc.hata || 'Ping sırasında hata oluştu.', 'danger');
+            } else {
+                uyariGoster(`${ip} için ping tamamlandı.`, 'success');
+            }
+            await cihazlariYukle(); // tablodaki durum, gecikme ve kayıp güncellensin (filtreler korunur)
+        } catch (e) {
+            uyariGoster('Sunucuyla iletişim koptu!', 'danger');
+            btn.disabled = false;
+            btn.innerHTML = eskiIcerik;
+        }
+    }
+
+    // Tablo her yenilendiğinde butonlar yeniden oluştuğu için tıklamayı tablo üzerinden dinliyoruz
+    document.getElementById('cihazTablosu').addEventListener('click', (olay) => {
+        const btn = olay.target.closest('.ping-btn');
+        if (btn) pingAt(btn.dataset.ip, btn);
+    });
+
+    // Filtre ve arama olayları
+    document.getElementById('birimFiltre').addEventListener('change', tabloyuCiz);
+    document.getElementById('durumFiltre').addEventListener('change', tabloyuCiz);
+    document.getElementById('ipArama').addEventListener('input', tabloyuCiz);
+    document.getElementById('filtreTemizle').addEventListener('click', () => {
+        document.getElementById('birimFiltre').value = '';
+        document.getElementById('durumFiltre').value = '';
+        document.getElementById('ipArama').value = '';
+        tabloyuCiz();
+    });
+
+    // Seçilen kapsamdaki tüm cihazlara ping atar (tüm ağ veya tek birim)
+    async function topluPing() {
+        const hataKutusu = document.getElementById('taramaHata');
+        const btn = document.getElementById('taramaBaslatBtn');
+        const eskiIcerik = btn.innerHTML;
+        hataKutusu.classList.add('d-none');
+
+        const birim = document.getElementById('taramaKapsam').value;
+        const govde = birim ? {tip: 'birim', deger: birim} : {tip: 'hepsi'};
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Taranıyor...';
+
+        try {
+            const cevap = await fetch('/api/tara', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(govde)
+            });
+            const sonuc = await cevap.json();
+
+            if (!cevap.ok) {
+                hataKutusu.textContent = sonuc.hata || 'Tarama sırasında hata oluştu.';
+                hataKutusu.classList.remove('d-none');
+                return;
+            }
+
+            bootstrap.Modal.getInstance(document.getElementById('taramaModal')).hide();
+            uyariGoster(sonuc.mesaj, 'success');
+            await cihazlariYukle();
+        } catch (e) {
+            hataKutusu.textContent = 'Sunucuyla iletişim koptu!';
+            hataKutusu.classList.remove('d-none');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = eskiIcerik;
+        }
+    }
+
+    document.getElementById('taramaBaslatBtn').addEventListener('click', topluPing);
+    document.getElementById('kaydetBtn').addEventListener('click', cihazKaydet);
+    cihazlariYukle();
+</script>
+</body>
+</html>
